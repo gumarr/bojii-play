@@ -134,9 +134,19 @@ const el = {};
 for (const id of ["name","cls","codeIn","createBtn","joinBtn","joinMsg","joinCard","lobby","codeTiles","phase","copyCode","field","roster","count","lobbyMsg","startBtn","readyBtn","leaveBtn","diag","copyReport"]) el[id] = $(id);
 
 // Signaling server: PeerJS cloud by default; ?server=host:port for a local PeerServer.
+// ICE: extra STUN + PeerJS's free TURN; ?turn=url1,url2&tu=user&tp=pass adds your own TURN.
 const params = new URLSearchParams(location.search);
+function iceServers() {
+  const list = [
+    { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302", "stun:stun.cloudflare.com:3478"] },
+    { urls: ["turn:eu-0.turn.peerjs.com:3478", "turn:us-0.turn.peerjs.com:3478"], username: "peerjs", credential: "peerjsp" },
+  ];
+  const turn = params.get("turn");
+  if (turn) list.push({ urls: turn.split(","), username: params.get("tu") || "", credential: params.get("tp") || "" });
+  return list;
+}
 function peerOptions() {
-  const o = { debug: 0 };
+  const o = { debug: 0, config: { iceServers: iceServers() } };
   const s = params.get("server");
   if (s) { const [host, port] = s.split(":"); Object.assign(o, { host, port: Number(port || 9000), path: "/", secure: false }); }
   return o;
@@ -263,7 +273,7 @@ el.joinBtn.addEventListener("click", async () => {
     setDiag("signal", "ok", "connected");
     const conn = peer.connect(hostIdFor(c), { reliable: true, serialization: "json" });
     const result = await new Promise((resolve) => {
-      const t = setTimeout(() => resolve({ err: { type: "connect-timeout" } }), 12000);
+      const t = setTimeout(() => resolve({ err: { type: "connect-timeout" } }), 20000);
       peer.once("error", (e) => { clearTimeout(t); resolve({ err: e }); });
       conn.on("data", function first(m) {
         if (m && m.t === "welcome") { clearTimeout(t); resolve({ ok: m.id }); }
@@ -271,9 +281,11 @@ el.joinBtn.addEventListener("click", async () => {
       });
     });
     if (!result.ok) {
+      const ice = result.err && result.err.type === "connect-timeout" ? await iceSummary(conn) : "";
       peer.destroy(); peer = null;
+      if (ice) setDiag("route", "bad", ice);
       if (result.reject) say(el.joinMsg, result.reject === "full" ? "Room " + c + " is full (" + MAX_PLAYERS + " players)." : "That game has already started.", "bad");
-      else if (result.err.type === "connect-timeout") say(el.joinMsg, "Found the room but couldn't connect to the host. One of you may be on a network that blocks peer-to-peer (some 4G and office networks). Try another network.", "bad");
+      else if (result.err.type === "connect-timeout") say(el.joinMsg, "Found the room but couldn't connect to the host. One of you may be on a network that blocks peer-to-peer (some 4G and office networks). Copy the report below and send it.", "bad");
       else say(el.joinMsg, errText(result.err), "bad");
       return;
     }
@@ -316,6 +328,16 @@ async function routeOf(conn) {
     } catch (_) {}
   }
   return "unknown";
+}
+
+// For a failed join: ICE state and which candidate types each side found.
+// No "srflx" = STUN blocked; no "relay" on either side = TURN unreachable.
+async function iceSummary(conn) {
+  const pc = conn.peerConnection; if (!pc) return "failed (no peer connection)";
+  const local = new Set(), remote = new Set();
+  try { (await pc.getStats()).forEach((s) => { if (s.type === "local-candidate") local.add(s.candidateType); if (s.type === "remote-candidate") remote.add(s.candidateType); }); } catch (_) {}
+  const fmt = (s) => (s.size ? Array.from(s).join("+") : "none");
+  return "failed · ICE " + pc.iceConnectionState + " · me: " + fmt(local) + " · host: " + fmt(remote);
 }
 
 // ---- room UI ----
