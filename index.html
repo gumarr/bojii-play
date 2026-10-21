@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BoJii Co-op P2P</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Same night-forest look as the artifact lobby, so test results compare side by side. */
+:root {
+  --bg: #13201a; --panel: #1c2d24; --panel-2: #243a2e; --line: #34503f;
+  --fg: #e8efe0; --muted: #a3b6a3; --glow: #ffc857; --moss: #8cc26c; --bad: #ff8a78;
+  --warrior: #e0734f; --archer: #7fc36a; --rogue: #9b8cf0;
+  --f-display: "Baloo 2", "Trebuchet MS", system-ui, sans-serif;
+  --f-body: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 var(--f-body); padding: 20px max(16px, env(safe-area-inset-right)) 32px max(16px, env(safe-area-inset-left)); }
+.wrap { max-width: 1040px; margin: 0 auto; display: grid; gap: 18px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; }
+h1 { font: 800 clamp(26px, 4vw, 36px)/1.1 var(--f-display); margin: 0; }
+h1 span { color: var(--glow); }
+.sub { color: var(--muted); margin: 0; max-width: 62ch; }
+h2 { font: 700 18px/1.2 var(--f-display); margin: 0; }
+.label { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 12px; min-width: 0; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+.field { display: grid; gap: 4px; min-width: 0; }
+input, select { font: 15px var(--f-body); color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; min-width: 0; }
+input:focus-visible, select:focus-visible, button:focus-visible, canvas:focus-visible { outline: 2px solid var(--glow); outline-offset: 2px; }
+#name { width: 13ch; }
+#codeIn { width: 9ch; font: 700 18px var(--f-mono); letter-spacing: .18em; text-transform: uppercase; }
+button { font: 700 15px var(--f-body); border-radius: 8px; padding: 9px 16px; cursor: pointer; border: 1px solid var(--line); background: var(--panel-2); color: var(--fg); }
+button.primary { background: var(--glow); color: #2a1d00; border-color: var(--glow); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+.or { color: var(--muted); align-self: center; padding: 0 4px; }
+.msg { margin: 0; min-height: 1.5em; }
+.msg.bad { color: var(--bad); } .msg.ok { color: var(--moss); }
+.lobby { display: grid; gap: 18px; grid-template-columns: minmax(0, 1fr) 320px; align-items: start; }
+@media (max-width: 820px) { .lobby { grid-template-columns: minmax(0, 1fr); } }
+.codebar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+.tiles { display: flex; gap: 6px; }
+.tiles b { font: 700 26px/1 var(--f-mono); width: 1.5em; padding: 8px 0; text-align: center; background: var(--bg); border: 1px solid var(--line); border-bottom: 3px solid var(--glow); border-radius: 6px; }
+.phase { font: 700 13px var(--f-body); padding: 4px 10px; border-radius: 999px; background: var(--panel-2); color: var(--muted); }
+.phase.playing { background: var(--moss); color: #10210f; }
+canvas { width: 100%; aspect-ratio: 16 / 9; display: block; border-radius: 8px; background: var(--bg); border: 1px solid var(--line); }
+.hint { color: var(--muted); font-size: 13px; margin: 0; }
+ul.roster { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.roster li { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 10px; background: var(--bg); border-radius: 8px; }
+.dot { width: 12px; height: 12px; border-radius: 3px; }
+.who { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.who small { color: var(--muted); }
+.ping { font: 500 13px var(--f-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.tag { font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 4px; background: var(--panel-2); color: var(--glow); margin-left: 4px; }
+.tag.rdy { color: var(--moss); }
+dl.diag { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; font-size: 13px; }
+dl.diag dt { color: var(--muted); }
+dl.diag dd { margin: 0; font-family: var(--f-mono); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+dd.ok { color: var(--moss); } dd.bad { color: var(--bad); } dd.wait { color: var(--glow); }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>BoJii <span>Co-op</span> P2P</h1>
+    <p class="sub">Peer-to-peer test build. The host's browser is the server: friends connect straight to it with the room code, no Claude account needed. Walk with WASD and compare the ping with the artifact lobby.</p>
+  </header>
+
+  <section class="card" id="joinCard">
+    <h2>Start or join a room</h2>
+    <div class="row">
+      <div class="field"><label class="label" for="name">Name</label><input id="name" maxlength="16" value="BoJii" autocomplete="off"></div>
+      <div class="field"><label class="label" for="cls">Class</label>
+        <select id="cls"><option value="warrior">Warrior</option><option value="archer">Archer</option><option value="rogue">Rogue</option></select>
+      </div>
+      <button class="primary" id="createBtn" disabled>Create room</button>
+      <span class="or">or</span>
+      <div class="field"><label class="label" for="codeIn">Room code</label><input id="codeIn" maxlength="5" placeholder="K7M2Q" autocomplete="off" spellcheck="false"></div>
+      <button id="joinBtn" disabled>Join</button>
+    </div>
+    <p class="msg" id="joinMsg" role="status">Loading…</p>
+  </section>
+
+  <section class="lobby" id="lobby" hidden>
+    <div class="card">
+      <div class="codebar">
+        <div class="field"><span class="label">Room code</span><div class="tiles" id="codeTiles"></div></div>
+        <div class="actions"><span class="phase" id="phase">Lobby</span><button id="copyCode">Copy code</button></div>
+      </div>
+      <canvas id="field" width="960" height="540" tabindex="0" aria-label="Test field: every player is a coloured block, move yours with WASD"></canvas>
+      <p class="hint">Click the field, then move with WASD. Your block has a yellow outline.</p>
+    </div>
+    <div style="display:grid; gap:18px; min-width:0">
+      <div class="card">
+        <h2>Players <span class="ping" id="count"></span></h2>
+        <ul class="roster" id="roster"></ul>
+        <p class="msg" id="lobbyMsg" role="status"></p>
+        <div class="actions">
+          <button class="primary" id="startBtn" hidden>Start game</button>
+          <button id="readyBtn" hidden>Ready</button>
+          <button id="leaveBtn">Leave room</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Connection check</h2>
+        <dl class="diag" id="diag"></dl>
+        <div class="actions"><button id="copyReport">Copy report</button></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script>
+"use strict";
+const PROTO = 1;
+const ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+const MAX_PLAYERS = 4;
+const FIELD_W = 32, FIELD_H = 18;
+const STATE_HZ = 20;
+const CLASS_COLOR = { warrior: "--warrior", archer: "--archer", rogue: "--rogue" };
+const CLASS_NAME = { warrior: "Warrior", archer: "Archer", rogue: "Rogue" };
+const cssCache = new Map();
+const css = (v) => { let c = cssCache.get(v); if (c === undefined) { c = getComputedStyle(document.documentElement).getPropertyValue(v).trim(); cssCache.set(v, c); } return c; };
+const $ = (id) => document.getElementById(id);
+const el = {};
+for (const id of ["name","cls","codeIn","createBtn","joinBtn","joinMsg","joinCard","lobby","codeTiles","phase","copyCode","field","roster","count","lobbyMsg","startBtn","readyBtn","leaveBtn","diag","copyReport"]) el[id] = $(id);
+
+// Signaling server: PeerJS cloud by default; ?server=host:port for a local PeerServer.
+const params = new URLSearchParams(location.search);
+function peerOptions() {
+  const o = { debug: 0 };
+  const s = params.get("server");
+  if (s) { const [host, port] = s.split(":"); Object.assign(o, { host, port: Number(port || 9000), path: "/", secure: false }); }
+  return o;
+}
+
+// ---- state ----
+let peer = null, role = null, code = "", phase = "lobby", seed = 0, ready = false, busy = false;
+let hostConn = null;                 // guest: connection to host
+const guests = new Map();            // host: peerId -> {conn, n, c, x, y, rdy, rtt, route}
+let players = [];                    // what everyone draws: [{id, n, c, x, y, host, rdy, rtt}]
+let myId = "";
+const me = { x: 6 + Math.random() * 20, y: 4 + Math.random() * 10 };
+const keys = new Set();
+const shown = new Map();
+let pingSeq = 0, pingSentAt = 0, rtt = -1; const pingHist = [];
+let stateCount = 0, stateRate = 0;
+const diag = { lib: ["wait", "loading"], signal: ["wait", "—"], room: ["wait", "—"], route: ["wait", "—"], ping: ["wait", "—"], rate: ["wait", "—"], peers: ["wait", "—"] };
+const DIAG_LABEL = { lib: "PeerJS", signal: "Signaling server", room: "Room", route: "Route to host", ping: "Me → host → me", rate: "Host updates/s", peers: "Players" };
+
+try { const s = JSON.parse(localStorage.getItem("bojii.coop") || "{}"); if (typeof s.n === "string") el.name.value = s.n.slice(0, 16); if (s.c in CLASS_NAME) el.cls.value = s.c; } catch (_) {}
+function remember() { try { localStorage.setItem("bojii.coop", JSON.stringify({ n: el.name.value, c: el.cls.value })); } catch (_) {} }
+function setDiag(k, cls, t) { diag[k] = [cls, t]; renderDiag(); }
+function renderDiag() { el.diag.replaceChildren(); for (const k of Object.keys(diag)) { const dt = document.createElement("dt"); dt.textContent = DIAG_LABEL[k]; const dd = document.createElement("dd"); dd.className = diag[k][0]; dd.textContent = diag[k][1]; el.diag.append(dt, dd); } }
+renderDiag();
+function say(t, text, cls = "") { t.textContent = text; t.className = "msg " + cls; }
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+function newCode() { const a = new Uint32Array(5); crypto.getRandomValues(a); return Array.from(a, (n) => ALPHABET[n % ALPHABET.length]).join(""); }
+const hostIdFor = (c) => "bojii-v" + PROTO + "-" + c.toLowerCase();
+const cleanCode = (s) => s.toUpperCase().replace(/[^A-Z0-9]/g, "").replace(/[IL]/g, "1").replace(/O/g, "0").slice(0, 5);
+const myName = () => (el.name.value.trim() || "BoJii").slice(0, 16);
+function stat(h, v) { h.push(v); if (h.length > 10) h.shift(); const s = h.slice().sort((a, b) => a - b); return "min " + s[0] + " · median " + s[s.length >> 1] + " ms"; }
+
+if (typeof Peer === "undefined") {
+  setDiag("lib", "bad", "failed to load");
+  say(el.joinMsg, "Couldn't load the networking library. Check your connection and reload.", "bad");
+} else {
+  setDiag("lib", "ok", "1.5.4");
+  el.createBtn.disabled = el.joinBtn.disabled = false;
+  say(el.joinMsg, "Ready. Create a room, or enter a friend's code.");
+}
+
+// Open a Peer with the given id (or a random one when id is null).
+function openPeer(id) {
+  return new Promise((resolve, reject) => {
+    const p = id ? new Peer(id, peerOptions()) : new Peer(peerOptions());
+    const onError = (e) => { clearTimeout(t); p.off("open", onOpen); p.destroy(); reject(e); };
+    const onOpen = () => { clearTimeout(t); p.off("error", onError); resolve(p); };
+    const t = setTimeout(() => onError({ type: "timeout" }), 10000);
+    p.once("open", onOpen);
+    p.once("error", onError);
+  });
+}
+function errText(e) {
+  const t = e && e.type;
+  if (t === "peer-unavailable") return "No room with that code. Check the code, or ask the host to create the room again.";
+  if (t === "timeout" || t === "network" || t === "server-error" || t === "socket-error") return "Couldn't reach the signaling server. Check your internet connection and try again.";
+  if (t === "browser-incompatible") return "This browser doesn't support peer-to-peer connections. Try Chrome, Edge or Firefox.";
+  return "Connection error (" + (t || "unknown") + "). Try again.";
+}
+
+// ---- host ----
+el.createBtn.addEventListener("click", async () => {
+  if (busy) return; busy = true; remember(); el.createBtn.disabled = el.joinBtn.disabled = true;
+  say(el.joinMsg, "Creating a room…");
+  try {
+    for (let i = 0; i < 4 && !peer; i++) {
+      const c = newCode();
+      try { peer = await openPeer(hostIdFor(c)); code = c; }
+      catch (e) { if (e.type !== "unavailable-id") throw e; }
+    }
+    if (!peer) { say(el.joinMsg, "Couldn't find a free code. Try again.", "bad"); return; }
+    role = "host"; myId = peer.id; phase = "lobby";
+    setDiag("signal", "ok", "connected"); setDiag("route", "ok", "you are the host"); setDiag("ping", "ok", "—");
+    peer.on("connection", acceptGuest);
+    peer.on("disconnected", () => { setDiag("signal", "wait", "lost, reconnecting"); peer.reconnect(); });
+    peer.on("error", (e) => { if (e.type !== "peer-unavailable") say(el.lobbyMsg, errText(e), "bad"); });
+    enterRoom();
+  } catch (e) { say(el.joinMsg, errText(e), "bad"); }
+  finally { busy = false; el.createBtn.disabled = el.joinBtn.disabled = !!peer; }
+});
+
+function acceptGuest(conn) {
+  conn.on("open", () => {
+    if (phase !== "lobby" || guests.size >= MAX_PLAYERS - 1) {
+      conn.send({ t: "reject", why: phase !== "lobby" ? "started" : "full" });
+      setTimeout(() => conn.close(), 300); return;
+    }
+    const g = { conn, n: "Someone", c: "warrior", x: FIELD_W / 2, y: FIELD_H / 2, rdy: false, rtt: -1, route: "" };
+    guests.set(conn.peer, g);
+    conn.send({ t: "welcome", id: conn.peer });
+    conn.on("data", (m) => onGuestData(g, m));
+    conn.on("close", () => { guests.delete(conn.peer); shown.delete(conn.peer); renderRoster(); });
+    routeOf(conn).then((r) => { g.route = r; });
+    renderRoster();
+  });
+}
+function onGuestData(g, m) {
+  if (!m || typeof m !== "object") return;
+  switch (m.t) {
+    case "hello": g.n = String(m.n || "Someone").slice(0, 16); g.c = m.c in CLASS_NAME ? m.c : "warrior"; break;
+    case "pos": if (Number.isFinite(m.x) && Number.isFinite(m.y)) { g.x = m.x; g.y = m.y; } break;
+    case "ping": g.conn.send({ t: "pong", s: m.s }); break;
+    case "rtt": g.rtt = Number(m.v) || -1; break;
+    case "ready": g.rdy = !!m.r; break;
+  }
+}
+function hostBroadcast() {
+  players = [{ id: myId, n: myName(), c: el.cls.value, x: me.x, y: me.y, host: true, rdy: false, rtt: -1 }];
+  for (const [id, g] of guests) players.push({ id, n: g.n, c: g.c, x: g.x, y: g.y, host: false, rdy: g.rdy, rtt: g.rtt });
+  const msg = { t: "state", ph: phase, seed, p: players.map((p) => [p.id, p.n, p.c, Math.round(p.x * 100) / 100, Math.round(p.y * 100) / 100, p.host ? 1 : 0, p.rdy ? 1 : 0, p.rtt]) };
+  for (const g of guests.values()) if (g.conn.open) g.conn.send(msg);
+}
+
+// ---- guest ----
+el.codeIn.addEventListener("input", () => { el.codeIn.value = cleanCode(el.codeIn.value); });
+el.codeIn.addEventListener("keydown", (e) => { if (e.key === "Enter") el.joinBtn.click(); });
+el.joinBtn.addEventListener("click", async () => {
+  const c = cleanCode(el.codeIn.value);
+  if (c.length !== 5) { say(el.joinMsg, "Room codes have 5 letters and numbers.", "bad"); el.codeIn.focus(); return; }
+  if (busy) return; busy = true; remember(); el.createBtn.disabled = el.joinBtn.disabled = true;
+  say(el.joinMsg, "Looking for room " + c + "…");
+  try {
+    peer = await openPeer(null);
+    setDiag("signal", "ok", "connected");
+    const conn = peer.connect(hostIdFor(c), { reliable: true, serialization: "json" });
+    const result = await new Promise((resolve) => {
+      const t = setTimeout(() => resolve({ err: { type: "connect-timeout" } }), 12000);
+      peer.once("error", (e) => { clearTimeout(t); resolve({ err: e }); });
+      conn.on("data", function first(m) {
+        if (m && m.t === "welcome") { clearTimeout(t); resolve({ ok: m.id }); }
+        else if (m && m.t === "reject") { clearTimeout(t); resolve({ reject: m.why }); }
+      });
+    });
+    if (!result.ok) {
+      peer.destroy(); peer = null;
+      if (result.reject) say(el.joinMsg, result.reject === "full" ? "Room " + c + " is full (" + MAX_PLAYERS + " players)." : "That game has already started.", "bad");
+      else if (result.err.type === "connect-timeout") say(el.joinMsg, "Found the room but couldn't connect to the host. One of you may be on a network that blocks peer-to-peer (some 4G and office networks). Try another network.", "bad");
+      else say(el.joinMsg, errText(result.err), "bad");
+      return;
+    }
+    role = "guest"; code = c; hostConn = conn; myId = result.ok;
+    conn.send({ t: "hello", n: myName(), c: el.cls.value });
+    conn.on("data", onHostData);
+    conn.on("close", () => { if (role === "guest") endSession("The host left the room. The session has ended."); });
+    routeOf(conn).then((r) => setDiag("route", r.startsWith("relay") ? "wait" : "ok", r));
+    enterRoom();
+  } catch (e) { if (peer) { peer.destroy(); peer = null; } say(el.joinMsg, errText(e), "bad"); }
+  finally { busy = false; el.createBtn.disabled = el.joinBtn.disabled = !!peer; }
+});
+function onHostData(m) {
+  if (!m || typeof m !== "object") return;
+  if (m.t === "state") {
+    stateCount++;
+    players = (Array.isArray(m.p) ? m.p : []).slice(0, MAX_PLAYERS).map((a) => ({ id: String(a[0]), n: String(a[1]).slice(0, 16), c: a[2], x: Number(a[3]) || 0, y: Number(a[4]) || 0, host: !!a[5], rdy: !!a[6], rtt: Number(a[7]) }));
+    if (m.ph !== phase) { phase = m.ph === "playing" ? "playing" : "lobby"; seed = m.seed || 0; onPhase(); }
+  } else if (m.t === "pong" && m.s === pingSeq) {
+    rtt = Math.round(performance.now() - pingSentAt);
+    setDiag("ping", rtt < 120 ? "ok" : "wait", stat(pingHist, rtt));
+    hostConn.send({ t: "rtt", v: rtt });
+  }
+}
+
+// Which ICE route the data channel took: host (same LAN), srflx (direct over the internet) or relay (TURN).
+async function routeOf(conn) {
+  for (let i = 0; i < 20; i++) {
+    await sleep(500);
+    const pc = conn.peerConnection; if (!pc) continue;
+    try {
+      const stats = await pc.getStats(); let pair = null; const cands = new Map();
+      stats.forEach((s) => { if (s.type === "transport" && s.selectedCandidatePairId) pair = stats.get(s.selectedCandidatePairId); if (s.type === "local-candidate" || s.type === "remote-candidate") cands.set(s.id, s); });
+      if (!pair) stats.forEach((s) => { if (s.type === "candidate-pair" && s.state === "succeeded" && (s.nominated || s.selected)) pair = s; });
+      if (!pair) continue;
+      const lt = (cands.get(pair.localCandidateId) || {}).candidateType, rt = (cands.get(pair.remoteCandidateId) || {}).candidateType;
+      if (lt === "relay" || rt === "relay") return "relay (TURN server)";
+      if (lt === "host" && rt === "host") return "direct (same network)";
+      return "direct (internet)";
+    } catch (_) {}
+  }
+  return "unknown";
+}
+
+// ---- room UI ----
+function enterRoom() {
+  el.joinCard.hidden = true; el.lobby.hidden = false;
+  el.codeTiles.replaceChildren(...code.split("").map((ch) => { const b = document.createElement("b"); b.textContent = ch; return b; }));
+  setDiag("room", "ok", code + (role === "host" ? " (you host)" : " (guest)"));
+  el.startBtn.hidden = role !== "host"; el.readyBtn.hidden = role !== "guest";
+  ready = false; el.readyBtn.textContent = "Ready";
+  say(el.lobbyMsg, role === "host" ? "Send the code to your friends. Start when everyone is in." : "Joined. Waiting for the host to start.");
+  onPhase(); el.field.focus();
+}
+function onPhase() {
+  el.phase.textContent = phase === "playing" ? "Playing · seed " + seed : "Lobby";
+  el.phase.classList.toggle("playing", phase === "playing");
+  el.startBtn.disabled = phase === "playing";
+  el.readyBtn.hidden = role !== "guest" || phase === "playing";
+  if (phase === "playing") say(el.lobbyMsg, "Game started. Everyone in the roster would now load world seed " + seed + ".", "ok");
+}
+el.startBtn.addEventListener("click", () => { if (role !== "host") return; const a = new Uint32Array(1); crypto.getRandomValues(a); seed = a[0] % 1e9; phase = "playing"; onPhase(); hostBroadcast(); });
+el.readyBtn.addEventListener("click", () => { ready = !ready; el.readyBtn.textContent = ready ? "Not ready" : "Ready"; if (hostConn) hostConn.send({ t: "ready", r: ready }); });
+el.leaveBtn.addEventListener("click", () => endSession(""));
+function endSession(reason) {
+  const wasRole = role; role = null;
+  if (peer) { try { peer.destroy(); } catch (_) {} } peer = null; hostConn = null;
+  guests.clear(); players = []; shown.clear(); phase = "lobby"; seed = 0; rtt = -1; pingHist.length = 0;
+  for (const k of ["signal", "room", "route", "ping", "rate", "peers"]) diag[k] = ["wait", "—"]; renderDiag(); onPhase();
+  el.lobby.hidden = true; el.joinCard.hidden = false; el.createBtn.disabled = el.joinBtn.disabled = false;
+  say(el.joinMsg, reason || (wasRole ? "You left the room." : ""), reason ? "bad" : "");
+}
+window.addEventListener("pagehide", () => { if (peer) peer.destroy(); });
+el.copyCode.addEventListener("click", () => copy(code, el.copyCode, "Copy code"));
+el.copyReport.addEventListener("click", () => {
+  const lines = ["BoJii Co-op P2P report · " + new Date().toISOString(), "Name: " + myName() + " · role: " + (role || "none"), "Browser: " + navigator.userAgent];
+  for (const k of Object.keys(diag)) lines.push(DIAG_LABEL[k] + ": " + diag[k][1]);
+  if (role === "host") for (const [id, g] of guests) lines.push("guest " + g.n + ": " + (g.route || "?") + ", ping " + g.rtt + " ms");
+  copy(lines.join("\n"), el.copyReport, "Copy report");
+});
+async function copy(text, btn, label) { try { await navigator.clipboard.writeText(text); btn.textContent = "Copied"; } catch (_) { btn.textContent = "Copy failed"; say(el.lobbyMsg, text); } setTimeout(() => { btn.textContent = label; }, 1500); }
+
+function renderRoster() {
+  const list = role === "host" ? [{ id: myId, n: myName(), c: el.cls.value, host: true, rdy: false, rtt: -1 }, ...Array.from(guests, ([id, g]) => ({ id, n: g.n, c: g.c, host: false, rdy: g.rdy, rtt: g.rtt }))] : players;
+  el.count.textContent = list.length + " / " + MAX_PLAYERS;
+  setDiag("peers", "ok", String(list.length));
+  el.roster.replaceChildren(...list.map((p) => {
+    const li = document.createElement("li");
+    const dot = document.createElement("span"); dot.className = "dot"; dot.style.background = css(CLASS_COLOR[p.c] || "--muted");
+    const who = document.createElement("span"); who.className = "who"; who.textContent = p.n + (p.id === myId ? " (you)" : "");
+    const small = document.createElement("small"); small.textContent = " " + (CLASS_NAME[p.c] || ""); who.append(small);
+    if (p.host) { const t = document.createElement("span"); t.className = "tag"; t.textContent = "HOST"; who.append(t); }
+    else if (p.rdy) { const t = document.createElement("span"); t.className = "tag rdy"; t.textContent = "READY"; who.append(t); }
+    const ping = document.createElement("span"); ping.className = "ping";
+    ping.textContent = p.host ? "" : p.rtt >= 0 ? p.rtt + " ms" : "…";
+    li.append(dot, who, ping); return li;
+  }));
+}
+
+// ---- loop ----
+window.addEventListener("keydown", (e) => { if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return; const k = e.key.toLowerCase(); if (k.length === 1 && "wasd".includes(k)) { keys.add(k); e.preventDefault(); } });
+window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
+window.addEventListener("blur", () => keys.clear());
+const ctx = el.field.getContext("2d");
+let last = performance.now(), lastNet = 0, lastPing = 0, lastSec = performance.now(), moved = false;
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (role) {
+    let mx = (keys.has("d") ? 1 : 0) - (keys.has("a") ? 1 : 0), my = (keys.has("s") ? 1 : 0) - (keys.has("w") ? 1 : 0);
+    if (mx || my) { const l = Math.hypot(mx, my); me.x = Math.max(0.5, Math.min(FIELD_W - 0.5, me.x + mx / l * 7 * dt)); me.y = Math.max(0.5, Math.min(FIELD_H - 0.5, me.y + my / l * 7 * dt)); moved = true; }
+    if (now - lastNet >= 1000 / STATE_HZ) {
+      lastNet = now;
+      if (role === "host") hostBroadcast();
+      else if (hostConn && hostConn.open && moved) { hostConn.send({ t: "pos", x: Math.round(me.x * 100) / 100, y: Math.round(me.y * 100) / 100 }); moved = false; }
+    }
+    if (role === "guest" && hostConn && hostConn.open && now - lastPing > 1000) { lastPing = now; pingSeq++; pingSentAt = now; hostConn.send({ t: "ping", s: pingSeq }); }
+    if (now - lastSec >= 1000) { lastSec = now; stateRate = stateCount; stateCount = 0; setDiag("rate", "ok", role === "host" ? "you are the host" : String(stateRate)); renderRoster(); }
+  }
+  draw(dt); requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+function draw(dt) {
+  const W = el.field.width, H = el.field.height, s = W / FIELD_W;
+  ctx.fillStyle = css("--bg"); ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = css("--panel-2"); ctx.lineWidth = 1;
+  for (let x = 0; x <= FIELD_W; x++) { ctx.beginPath(); ctx.moveTo(x * s + .5, 0); ctx.lineTo(x * s + .5, H); ctx.stroke(); }
+  for (let y = 0; y <= FIELD_H; y++) { ctx.beginPath(); ctx.moveTo(0, y * s + .5); ctx.lineTo(W, y * s + .5); ctx.stroke(); }
+  if (!role) return;
+  const list = role === "host" ? [{ id: myId, n: myName(), c: el.cls.value, x: me.x, y: me.y }, ...Array.from(guests, ([id, g]) => ({ id, n: g.n, c: g.c, x: g.x, y: g.y }))] : players;
+  const k = 1 - Math.exp(-dt * 30);
+  ctx.font = "600 15px " + css("--f-body"); ctx.textAlign = "center";
+  for (const p of list) {
+    const mine = p.id === myId, tx = mine ? me.x : p.x, ty = mine ? me.y : p.y;
+    let d = shown.get(p.id); if (!d) { d = { x: tx, y: ty }; shown.set(p.id, d); }
+    if (mine) { d.x = tx; d.y = ty; } else { d.x += (tx - d.x) * k; d.y += (ty - d.y) * k; }
+    const px = d.x * s, py = d.y * s, r = s * .42;
+    ctx.fillStyle = css(CLASS_COLOR[p.c] || "--muted"); ctx.beginPath(); ctx.roundRect(px - r, py - r, r * 2, r * 2, 6); ctx.fill();
+    if (mine) { ctx.strokeStyle = css("--glow"); ctx.lineWidth = 3; ctx.stroke(); }
+    ctx.fillStyle = css("--fg"); ctx.fillText(p.n, px, py - r - 6);
+  }
+}
+</script>
+</body>
+</html>
